@@ -163,7 +163,14 @@ def compare_vcfs(allele_frequency_difference, baseline_vcf_dict, compare_vcf_dic
     # If the position is not found in baseline vcf
     for chromosome in compare_vcf_dict.keys():
         for position in compare_vcf_dict[chromosome].keys():
-            if position not in baseline_vcf_dict[chromosome].keys():
+            try:
+                if position not in baseline_vcf_dict[chromosome].keys():
+                    if chromosome not in not_in_baseline_vcf_dict.keys():
+                        not_in_baseline_vcf_dict[chromosome] = [position]
+                    else:
+                        not_in_baseline_vcf_dict[chromosome].append(position)
+            # If the chromosome is not found in baseline_vcf_dict, add it straight to the not_in_baseline_vcf_dict
+            except KeyError:
                 if chromosome not in not_in_baseline_vcf_dict.keys():
                     not_in_baseline_vcf_dict[chromosome] = [position]
                 else:
