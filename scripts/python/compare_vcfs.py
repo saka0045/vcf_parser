@@ -135,8 +135,10 @@ def compare_vcfs(allele_frequency_difference, baseline_vcf_dict, compare_vcf_dic
                 compare_gt = compare_vcf_dict[chromosome][position]["GT"]
                 compare_af = compare_vcf_dict[chromosome][position]["AF"]
                 difference_af = abs(baseline_af - compare_af)
-                # If ALT allele and GT is the same, add the position to exact_match_dict
-                if baseline_alt == compare_alt and baseline_gt == compare_gt:
+                # If ALT allele and GT is the same and the AF is within the specified amount,
+                # add the position to exact_match_dict
+                if baseline_alt == compare_alt and baseline_gt == compare_gt and \
+                        difference_af <= allele_frequency_difference:
                     if chromosome not in exact_match_dict.keys():
                         exact_match_dict[chromosome] = [position]
                     else:
