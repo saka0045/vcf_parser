@@ -18,18 +18,12 @@ def main():
         "-o", "--outDir", dest="output_directory", required=True,
         help="Path to the output directory to save result files"
     )
-    parser.add_argument(
-        "-a", "--alleleFrequencyDifference", dest="allele_frequency_difference", type=float, required=True,
-        help="Allele frequency difference. Greater than this number will represent a match. "
-             "Requires decimal between 0.00 and 1.00"
-    )
 
     args = parser.parse_args()
 
     baseline_vcf_path = os.path.abspath(args.baseline_vcf_path)
     compare_vcf_path = os.path.abspath(args.compare_vcf_path)
     output_directory = os.path.abspath(args.output_directory)
-    allele_frequency_difference = args.allele_frequency_difference
 
     baseline_vcf = open(baseline_vcf_path, "r")
     compare_vcf = open(compare_vcf_path, "r")
@@ -37,23 +31,22 @@ def main():
     # Parse the VCFs
     baseline_vcf_dict = {}
     parse_vcf(baseline_vcf, baseline_vcf_dict)
+    variants_in_baseline_vcf = count_number_of_variants_in_vcf(baseline_vcf_dict)
     compare_vcf_dict = {}
     parse_vcf(compare_vcf, compare_vcf_dict)
+    variants_in_compare_vcf = count_number_of_variants_in_vcf(compare_vcf_dict)
 
     # Compare the VCFs
-    different_gt_dict, exact_match_dict, not_in_baseline_vcf_dict, not_in_compare_vcf_dict, \
-    same_position_different_variant_dict = compare_vcfs(allele_frequency_difference, baseline_vcf_dict,
-                                                        compare_vcf_dict)
+    match_dict, not_in_baseline_vcf_dict, not_in_compare_vcf_dict, \
+    same_position_different_variant_dict = compare_vcfs(baseline_vcf_dict, compare_vcf_dict)
 
     # Write out results
-    exact_match_file = open(output_directory + "/exact_match_variants.csv", "w")
-    different_gt_file = open(output_directory + "/match_with_different_gt.csv", "w")
+    match_file = open(output_directory + "/match_variants.csv", "w")
     same_position_no_match_file = open(output_directory + "/same_position_no_match.csv", "w")
     not_in_compare_vcf_file = open(output_directory + "/not_in_compare_vcf.csv", "w")
     not_in_baseline_vcf_file = open(output_directory + "/not_in_baseline_vcf.csv", "w")
 
-    write_results_found_in_both_vcfs(baseline_vcf_dict, compare_vcf_dict, exact_match_dict, exact_match_file)
-    write_results_found_in_both_vcfs(baseline_vcf_dict, compare_vcf_dict, different_gt_dict, different_gt_file)
+    write_results_found_in_both_vcfs(baseline_vcf_dict, compare_vcf_dict, match_dict, match_file)
     write_results_found_in_both_vcfs(baseline_vcf_dict, compare_vcf_dict, same_position_different_variant_dict,
                                      same_position_no_match_file)
     write_results_only_found_in_one_vcf(baseline_vcf_dict, not_in_compare_vcf_dict, not_in_compare_vcf_file)
@@ -61,11 +54,22 @@ def main():
 
     baseline_vcf.close()
     compare_vcf.close()
-    exact_match_file.close()
-    different_gt_file.close()
+    match_file.close()
     same_position_no_match_file.close()
     not_in_compare_vcf_file.close()
     not_in_baseline_vcf_file.close()
+
+
+def count_number_of_variants_in_vcf(vcf_dict):
+    """
+    This function counts the number of variants in the vcf
+    :param vcf_dict:
+    :return:
+    """
+    number_of_variants = 0
+    for chromosome in vcf_dict.keys():
+        number_of_variants += len(vcf_dict[chromosome].keys())
+    return number_of_variants
 
 
 def write_results_only_found_in_one_vcf(vcf_dict, variant_dict, result_file):
@@ -116,9 +120,8 @@ def write_results_found_in_both_vcfs(baseline_vcf_dict, compare_vcf_dict, varian
             result_file.write(chromosome + "," + position + "," + ",".join(compare_results) + "\n")
 
 
-def compare_vcfs(allele_frequency_difference, baseline_vcf_dict, compare_vcf_dict):
-    exact_match_dict = {}
-    different_gt_dict = {}
+def compare_vcfs(baseline_vcf_dict, compare_vcf_dict):
+    match_dict = {}
     same_position_different_variant_dict = {}
     not_in_compare_vcf_dict = {}
     not_in_baseline_vcf_dict = {}
@@ -135,19 +138,12 @@ def compare_vcfs(allele_frequency_difference, baseline_vcf_dict, compare_vcf_dic
                 compare_gt = compare_vcf_dict[chromosome][position]["GT"]
                 compare_af = compare_vcf_dict[chromosome][position]["AF"]
                 difference_af = abs(baseline_af - compare_af)
-                # If ALT allele and GT is the same, add the position to exact_match_dict
-                if baseline_alt == compare_alt and baseline_gt == compare_gt:
-                    if chromosome not in exact_match_dict.keys():
-                        exact_match_dict[chromosome] = [position]
+                # If ALT allele and GT is the same, add the position to match_dict
+                if baseline_alt == compare_alt:
+                    if chromosome not in match_dict.keys():
+                        match_dict[chromosome] = [position]
                     else:
-                        exact_match_dict[chromosome].append(position)
-                # If ALT allele is the same and GT is different but the difference in AF is within specified amount
-                elif baseline_alt == compare_alt and difference_af <= allele_frequency_difference and \
-                        baseline_gt != compare_gt:
-                    if chromosome not in different_gt_dict.keys():
-                        different_gt_dict[chromosome] = [position]
-                    else:
-                        different_gt_dict[chromosome].append(position)
+                        match_dict[chromosome].append(position)
                 # If the ALT alleles don't match
                 else:
                     if chromosome not in same_position_different_variant_dict.keys():
@@ -175,7 +171,7 @@ def compare_vcfs(allele_frequency_difference, baseline_vcf_dict, compare_vcf_dic
                     not_in_baseline_vcf_dict[chromosome] = [position]
                 else:
                     not_in_baseline_vcf_dict[chromosome].append(position)
-    return different_gt_dict, exact_match_dict, not_in_baseline_vcf_dict, not_in_compare_vcf_dict, same_position_different_variant_dict
+    return match_dict, not_in_baseline_vcf_dict, not_in_compare_vcf_dict, same_position_different_variant_dict
 
 
 def parse_vcf(vcf, vcf_dict):
@@ -216,7 +212,7 @@ def parse_vcf(vcf, vcf_dict):
             vcf_dict[chromosome][position]["AF"] = round(allele_frequency, 2)
         elif position in vcf_dict[chromosome].keys():
             print("Variant found in duplicate position " + chromosome + position)
-            print("This script will not work with duplicate positions, skipping this variant")
+            print("This script can't handle variants in duplicate position, skipping the second occurrence")
             continue
 
 
